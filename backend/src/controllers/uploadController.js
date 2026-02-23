@@ -3,11 +3,12 @@ import multer from 'multer';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { ApiError } from '../utils/errors.js';
+import { env } from '../config/env.js';
 
 const allowedExtensions = new Set(['.mkv', '.mp4']);
 
 const storage = multer.diskStorage({
-  destination: 'storage/uploads',
+  destination: env.uploadDir,
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${uuidv4()}${ext}`);
@@ -16,7 +17,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 },
+  limits: { fileSize: env.maxUploadSizeBytes },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!allowedExtensions.has(ext)) {

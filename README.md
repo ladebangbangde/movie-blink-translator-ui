@@ -104,3 +104,30 @@ docker compose logs -f backend worker
 ```bash
 docker compose down
 ```
+
+
+## 配置集中管理（环境变量）
+
+你可以把 Redis、端口、存储路径、并发、上传大小等集中在 `.env` 管理。
+
+### 1) 复制示例配置
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+### 2) 关键变量
+
+- `REDIS_URL`：队列 Redis 地址
+- `PORT`：后端监听端口
+- `STORAGE_DIR` / `UPLOAD_DIR` / `OUTPUT_DIR`：上传与输出目录
+- `WORKER_CONCURRENCY`：worker 并发数
+- `FILE_TTL_HOURS`：文件清理时间（小时）
+- `MAX_UPLOAD_SIZE_BYTES`：上传大小上限
+- `VITE_API_BASE_URL`：前端 API 基础地址
+
+### 3) Docker Compose 使用
+
+`docker-compose.yml` 已读取根目录 `.env`，可直接通过修改 `.env` 调整部署参数。

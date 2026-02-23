@@ -4,6 +4,7 @@ import path from 'node:path';
 import mime from 'mime-types';
 import { subtitleQueue } from '../queue/subtitleQueue.js';
 import { ApiError } from '../utils/errors.js';
+import { env } from '../config/env.js';
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/jobs/:jobId', async (req, res, next) => {
 router.get('/download/:jobId', async (req, res, next) => {
   try {
     const jobId = req.params.jobId;
-    const candidates = ['.srt', '.ass'].map((ext) => path.resolve(`storage/outputs/${jobId}${ext}`));
+    const candidates = ['.srt', '.ass'].map((ext) => path.join(env.outputDir, `${jobId}${ext}`));
     const outputPath = candidates.find((candidate) => fs.existsSync(candidate));
     if (!outputPath) throw new ApiError('file not found', 404);
 

@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { env } from '../config/env.js';
 
-const uploadDir = path.resolve('storage/uploads');
-const outputDir = path.resolve('storage/outputs');
+const uploadDir = env.uploadDir;
+const outputDir = env.outputDir;
 
 export function getUploadPath(fileId, ext = '') {
   return path.join(uploadDir, `${fileId}${ext}`);
@@ -14,13 +15,14 @@ export function getOutputPath(jobId, ext = '.srt') {
 
 export function ensureWithinStorage(targetPath) {
   const resolved = path.resolve(targetPath);
-  if (!resolved.startsWith(path.resolve('storage'))) {
+  const allowedRoots = [path.resolve(uploadDir), path.resolve(outputDir)];
+  if (!allowedRoots.some((root) => resolved.startsWith(root))) {
     throw new Error('Invalid storage path');
   }
   return resolved;
 }
 
-export function cleanupOlderThanHours(hours = 24) {
+export function cleanupOlderThanHours(hours = env.fileTtlHours) {
   const ttl = hours * 60 * 60 * 1000;
   for (const dir of [uploadDir, outputDir]) {
     const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];

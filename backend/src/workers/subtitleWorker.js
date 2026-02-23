@@ -5,9 +5,10 @@ import { connection } from '../queue/subtitleQueue.js';
 import { extractSubtitle } from '../services/ffmpegService.js';
 import { filterAssContent, filterSrtContent } from '../services/subtitleParser.js';
 import { cleanupOlderThanHours } from '../services/storageService.js';
+import { env } from '../config/env.js';
 
 function resolveInputPath(fileId) {
-  const candidates = ['.mkv', '.mp4'].map((ext) => path.resolve(`storage/uploads/${fileId}${ext}`));
+  const candidates = ['.mkv', '.mp4'].map((ext) => path.join(env.uploadDir, `${fileId}${ext}`));
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
@@ -18,12 +19,12 @@ const worker = new Worker('subtitle-jobs', async (job) => {
     throw new Error('Input file not found');
   }
 
-  cleanupOlderThanHours(24);
+  cleanupOlderThanHours(env.fileTtlHours);
   await job.updateProgress(10);
 
   const ext = '.srt';
-  const rawOutputPath = path.resolve(`storage/outputs/${job.id}-raw${ext}`);
-  const finalOutputPath = path.resolve(`storage/outputs/${job.id}${ext}`);
+  const rawOutputPath = path.join(env.outputDir, `${job.id}-raw${ext}`);
+  const finalOutputPath = path.join(env.outputDir, `${job.id}${ext}`);
 
   await extractSubtitle(inputPath, subtitleIndex, rawOutputPath);
   await job.updateProgress(70);
@@ -37,7 +38,7 @@ const worker = new Worker('subtitle-jobs', async (job) => {
   return { output: finalOutputPath };
 }, {
   connection,
-  concurrency: 3
+  concurrency: env.workerConcurrency
 });
 
 worker.on('completed', (job) => {
