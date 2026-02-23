@@ -49,3 +49,24 @@ cd frontend && npm run dev
 - File types: `.mkv`, `.mp4`
 - Worker concurrency: 3
 - Files older than 24 hours are cleaned when worker runs.
+
+
+## IDE Troubleshooting (App.vue shows TS2304/TS1110)
+
+If your editor reports errors like `Cannot find name "template"` / `Cannot find name "router"` in `App.vue`, it is usually parsing `.vue` as plain TypeScript instead of Vue SFC.
+
+1. In `frontend/`, install deps so `typescript` and `vue-tsc` exist:
+
+```bash
+cd frontend && npm install
+```
+
+2. In VS Code, install/enable **Volar** and disable Vetur.
+3. Ensure workspace recommends/extensions are applied from `.vscode/extensions.json`.
+4. Reload VS Code window.
+
+You can also run a project type check:
+
+```bash
+cd frontend && npm run typecheck
+```
