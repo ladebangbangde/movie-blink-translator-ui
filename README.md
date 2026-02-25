@@ -335,3 +335,30 @@ curl -s http://localhost:3000/health
    - 确认上传的是 `.mkv` / `.mp4`；
    - 确认 worker 正常运行；
    - 查看 worker 日志定位 ffmpeg/ffprobe 报错。
+
+
+### 7) 过滤英文字幕是在哪里体现的？
+
+英文过滤在后端「任务参数校验 -> worker 过滤执行 -> 解析器规则」三处串起来：
+
+1. **任务参数入口（mode）**
+   - `POST /api/jobs` 接口允许 `mode` 为 `zh` / `en` / `both`；
+   - 当你传 `mode: "en"`，表示只保留英文字幕行。
+
+2. **worker 调用过滤器**
+   - worker 在抽取原始字幕后，会根据 `mode` 调用 `filterSrtContent` / `filterAssContent`；
+   - 因此 `mode: "en"` 会进入英文过滤分支。
+
+3. **英文过滤核心规则**
+   - 在 `subtitleParser` 中，`mode === 'en'` 的判定是：
+     - 行内包含英文字母（`[A-Za-z]`）
+     - 且不包含中文字符（`[\u4e00-\u9fff]`）
+   - 也就是“纯英文行保留，中英混合行不保留”。
+
+示例请求：
+
+```bash
+curl -X POST http://localhost:3000/api/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"fileId":"<你的fileId>","subtitleIndex":0,"mode":"en"}'
+```
