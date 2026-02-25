@@ -2,6 +2,28 @@
 
 本文档说明如何以 **Docker** 方式将 `movie-blink-translator-ui` 上传并部署到远端 Docker 服务器，并列出项目启动所需的关键参数。
 
+## 快速回答：如何打包并上传到远端
+
+如果你只关心“怎么打包上传”，直接用下面这组命令（离线传输，不依赖镜像仓库）：
+
+```bash
+# 1) 本地构建镜像
+docker build -t movie-blink-translator-ui:latest .
+
+# 2) 本地打包镜像
+docker save movie-blink-translator-ui:latest | gzip > movie-blink-translator-ui.tar.gz
+
+# 3) 上传到远端服务器
+scp movie-blink-translator-ui.tar.gz user@<SERVER_IP>:/tmp/
+
+# 4) 远端导入并启动
+ssh user@<SERVER_IP> 'gunzip -c /tmp/movie-blink-translator-ui.tar.gz | docker load &&   docker rm -f movie-blink-translator-ui >/dev/null 2>&1 || true;   docker run -d --name movie-blink-translator-ui --restart unless-stopped   -p 8080:80   -e NODE_ENV=production   -e PORT=80   -e API_BASE_URL=https://api.yourdomain.com   -e TZ=Asia/Shanghai   movie-blink-translator-ui:latest'
+```
+
+> 把 `user`、`<SERVER_IP>`、`API_BASE_URL` 按你的环境替换即可。
+
+---
+
 ## 1. 前置条件
 
 请确保本地和远端环境满足以下条件：
