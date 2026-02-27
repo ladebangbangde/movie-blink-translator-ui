@@ -13,6 +13,6 @@ COPY backend/ ./
 
 RUN mkdir -p storage/uploads storage/outputs
 
-EXPOSE 3000
+EXPOSE 3020 33002
 
 CMD ["npm", "run", "start"]
