@@ -6,13 +6,13 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
-COPY backend/package*.json ./
+COPY package*.json ./
 RUN npm install --omit=dev
 
-COPY backend/ ./
+COPY . ./
 
 RUN mkdir -p storage/uploads storage/outputs
 
-EXPOSE 3020 33002
+EXPOSE 3000
 
 CMD ["npm", "run", "start"]
