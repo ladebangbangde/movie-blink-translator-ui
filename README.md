@@ -138,3 +138,12 @@ cp frontend/.env.example frontend/.env
 
 如果你是从 IDE 直接用 `frontend/Dockerfile` 构建，请把 **Build context 设置为 `frontend/` 目录**。
 本仓库现在的 `frontend/Dockerfile` 已按 `frontend/` 作为上下文编写（`COPY . ./`、`COPY nginx.conf ...`）。
+
+
+### 常见运行报错（nginx: host not found in upstream "backend"）
+
+如果前端容器日志出现：
+
+`host not found in upstream "backend"`
+
+通常是容器启动瞬间 DNS 解析时序导致。当前 `frontend/nginx.conf` 已改为 Docker DNS `127.0.0.11` + 变量 upstream 方式，避免 Nginx 在启动阶段因 upstream 暂不可解析而直接退出。
