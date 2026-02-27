@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "*.vue": "vue"
+  },
+  "typescript.tsdk": "frontend/node_modules/typescript/lib"
+}
