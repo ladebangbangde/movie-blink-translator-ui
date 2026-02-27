@@ -122,6 +122,8 @@ cp frontend/.env.example frontend/.env
 ### 2) 关键变量
 
 - `REDIS_URL`：队列 Redis 地址
+  - Docker/Compose: `redis://redis:6379`
+  - 本地直连可设为: `redis://127.0.0.1:6379`
 - `PORT`：后端监听端口
 - `STORAGE_DIR` / `UPLOAD_DIR` / `OUTPUT_DIR`：上传与输出目录
 - `WORKER_CONCURRENCY`：worker 并发数
