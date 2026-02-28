@@ -9,20 +9,14 @@ MVP for extracting embedded subtitles from MKV/MP4 and filtering bilingual lines
 
 ## Quick Start
 
-### 1) Start Redis
-
-```bash
-redis-server
-```
-
-### 2) Install deps
+### 1) Install deps
 
 ```bash
 cd backend && npm install
 cd ../frontend && npm install
 ```
 
-### 3) Run services
+### 2) Run services
 
 ```bash
 # terminal 1
@@ -34,6 +28,94 @@ cd backend && npm run worker
 # terminal 3
 cd frontend && npm run dev
 ```
+
+
+
+### 推荐：纯 Docker Compose（Redis 跟随容器启动）
+
+如果你不想在宿主机额外启动 Redis，直接使用：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+说明：
+- `backend` / `worker` 通过 `REDIS_URL=redis://redis:6379` 连接 Compose 内部 `redis` 服务。
+- 默认把容器内 `6379` 映射到宿主机 `${REDIS_HOST_PORT:-6380}`，避免与宿主机已有 Redis 端口冲突。
+- 如无需宿主机直连 Redis，可不使用该端口，仅容器内部通信即可。
+
+
+### 2.1) 配置文件怎么改（按你的部署方式）
+
+项目里你主要会改这 3 个配置文件：
+
+- 根目录 `.env`（给 `docker-compose.yml` 用）
+- `backend/.env`（后端单独运行时用）
+- `frontend/.env`（前端单独运行时用）
+
+#### A. 纯 Docker Compose（推荐，不需要宿主机手动起 Redis）
+
+1. 复制：
+
+```bash
+cp .env.example .env
+```
+
+2. 编辑根目录 `.env`：
+
+```env
+PORT=3000
+REDIS_URL=redis://redis:6379
+REDIS_HOST_PORT=6380
+WORKER_CONCURRENCY=3
+FILE_TTL_HOURS=24
+MAX_UPLOAD_SIZE_BYTES=2147483648
+STORAGE_DIR=storage
+UPLOAD_DIR=storage/uploads
+OUTPUT_DIR=storage/outputs
+```
+
+3. 启动：
+
+```bash
+docker compose up -d --build
+```
+
+> 说明：`redis://redis:6379` 里的 `redis` 是 Compose service 名，只在 Compose 网络内可解析。
+
+#### B. 后端/Worker 在宿主机直接跑（Redis 也在宿主机）
+
+> 现在 `backend` 在未设置 `REDIS_URL` 时，默认也会连 `redis://127.0.0.1:6379`，可直接本机启动调试。
+
+编辑 `backend/.env`：
+
+```env
+PORT=3000
+NODE_ENV=development
+REDIS_URL=redis://127.0.0.1:6379
+```
+
+如果 Redis 开启密码：
+
+```env
+REDIS_URL=redis://:你的密码@127.0.0.1:6379/0
+```
+
+#### C. 连接远程 Redis（云 Redis / K8s Service）
+
+编辑你实际运行后端的环境变量（`.env` 或 `backend/.env`）：
+
+```env
+REDIS_URL=redis://:你的密码@redis.example.com:6379/0
+```
+
+K8s 内建议写完整 Service DNS（示例）：
+
+```env
+REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
+```
+
 
 ## API Overview
 
@@ -123,7 +205,8 @@ cp frontend/.env.example frontend/.env
 
 - `REDIS_URL`：队列 Redis 地址
   - Docker/Compose: `redis://redis:6379`
-  - 本地直连可设为: `redis://127.0.0.1:6379`
+  - 本地直连: `redis://127.0.0.1:6379`（backend 默认值）
+- `REDIS_HOST_PORT`：Redis 对宿主机映射端口（默认 `6380`，避免占用宿主机 `6379`）
 - `PORT`：后端监听端口
 - `STORAGE_DIR` / `UPLOAD_DIR` / `OUTPUT_DIR`：上传与输出目录
 - `WORKER_CONCURRENCY`：worker 并发数

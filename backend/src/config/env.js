@@ -11,7 +11,8 @@ const rootStorageDir = process.env.STORAGE_DIR || 'storage';
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: asInt(process.env.PORT, 3000),
-  redisUrl: process.env.REDIS_URL || 'redis://redis:6379',
+  // Default to localhost for direct backend runs; docker-compose overrides via REDIS_URL=redis://redis:6379
+  redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
   uploadDir: path.resolve(process.env.UPLOAD_DIR || `${rootStorageDir}/uploads`),
   outputDir: path.resolve(process.env.OUTPUT_DIR || `${rootStorageDir}/outputs`),
   maxUploadSizeBytes: asInt(process.env.MAX_UPLOAD_SIZE_BYTES, 2 * 1024 * 1024 * 1024),
