@@ -117,6 +117,16 @@ REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
 ```
 
 
+
+### 4) 硬字幕 OCR（可选）
+
+如果视频没有内封字幕轨（画面里有“烧录字幕”），可在前端选择 **画面硬字幕 OCR（实验）** 模式。
+
+说明：
+- OCR 模式不依赖 `检测字幕轨` 结果。
+- worker 会按 `OCR_INTERVAL_SEC` 抽帧并用 `OCR_LANG` 识别（默认 `chi_sim+eng`）。
+- 识别后仍会走 `zh/en/both` 过滤并输出 `.srt`。
+
 ## API Overview
 
 - `POST /api/upload` upload video (`file` form-data)

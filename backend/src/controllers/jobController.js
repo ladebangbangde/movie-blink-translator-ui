@@ -10,15 +10,17 @@ const router = express.Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { fileId, subtitleIndex, mode = 'both' } = req.body;
+    const { fileId, subtitleIndex, mode = 'both', source = 'embedded' } = req.body;
     if (!fileId && fileId !== 0) throw new ApiError('fileId is required', 400);
-    if (typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
+    if (!['embedded', 'ocr'].includes(source)) throw new ApiError('invalid source', 400);
+    if (source === 'embedded' && typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
     if (!['zh', 'en', 'both'].includes(mode)) throw new ApiError('invalid mode', 400);
 
     const job = await subtitleQueue.add('subtitle-process', {
       fileId,
-      subtitleIndex,
-      mode
+      subtitleIndex: source === 'embedded' ? subtitleIndex : null,
+      mode,
+      source
     }, {
       removeOnComplete: 50,
       removeOnFail: 50

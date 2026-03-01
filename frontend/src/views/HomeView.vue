@@ -8,6 +8,7 @@ const fileId = ref('');
 const streams = ref([]);
 const subtitleIndex = ref(null);
 const mode = ref('both');
+const source = ref('embedded');
 const uploadProgress = ref(0);
 const jobId = ref('');
 const jobStatus = ref('idle');
@@ -15,7 +16,7 @@ const progress = ref(0);
 const failedReason = ref('');
 const outputPath = ref('');
 
-const canCreateJob = computed(() => fileId.value && subtitleIndex.value !== null);
+const canCreateJob = computed(() => fileId.value && (source.value === 'ocr' || subtitleIndex.value !== null));
 
 async function onSelectUpload(uploadFile) {
   try {
@@ -45,7 +46,8 @@ async function onCreateJob() {
     const result = await createJob({
       fileId: fileId.value,
       subtitleIndex: subtitleIndex.value,
-      mode: mode.value
+      mode: mode.value,
+      source: source.value
     });
     jobId.value = String(result.jobId);
     jobStatus.value = 'pending';
@@ -104,8 +106,14 @@ async function pollJob() {
 
       <el-divider />
 
-      <el-button :disabled="!fileId" @click="onDetect">检测字幕轨</el-button>
-      <el-select v-model="subtitleIndex" placeholder="选择字幕轨" style="width: 100%; margin-top: 12px">
+
+      <el-radio-group v-model="source" style="margin: 8px 0 12px 0">
+        <el-radio-button label="embedded">内封字幕轨</el-radio-button>
+        <el-radio-button label="ocr">画面硬字幕 OCR（实验）</el-radio-button>
+      </el-radio-group>
+
+      <el-button :disabled="!fileId || source === 'ocr'" @click="onDetect">检测字幕轨</el-button>
+      <el-select v-model="subtitleIndex" :disabled="source === 'ocr'" placeholder="选择字幕轨" style="width: 100%; margin-top: 12px">
         <el-option
           v-for="s in streams"
           :key="s.index"
@@ -113,6 +121,7 @@ async function pollJob() {
           :value="s.index"
         />
       </el-select>
+      <div v-if="source === 'ocr'" style="margin-top: 8px; color: #909399">OCR 模式不需要选择字幕轨，将从画面底部识别文本。</div>
 
       <el-radio-group v-model="mode" style="margin: 16px 0">
         <el-radio-button label="zh">仅中文</el-radio-button>
