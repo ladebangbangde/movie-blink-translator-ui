@@ -44,3 +44,21 @@ export async function extractSubtitle(inputPath, subtitleIndex, outputPath) {
   const args = ['-y', '-i', inputPath, '-map', `0:${subtitleIndex}`, outputPath];
   await runCommand('ffmpeg', args);
 }
+
+
+export async function composeVideoWithSubtitle(inputPath, subtitlePath, outputVideoPath) {
+  const args = [
+    '-y',
+    '-i', inputPath,
+    '-i', subtitlePath,
+    '-map', '0:v',
+    '-map', '0:a?',
+    '-map', '1:0',
+    '-sn',
+    '-c:v', 'copy',
+    '-c:a', 'copy',
+    '-c:s', 'srt',
+    outputVideoPath
+  ];
+  await runCommand('ffmpeg', args);
+}

@@ -126,6 +126,7 @@ REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
 - OCR 模式不依赖 `检测字幕轨` 结果。
 - worker 会按 `OCR_INTERVAL_SEC` 抽帧并用 `OCR_LANG` 识别（默认 `chi_sim+eng`，间隔默认 2 秒，速度更稳）。
 - 识别后仍会走 `zh/en/both` 过滤并输出 `.srt`。
+- 可选“输出新视频”模式：移除原字幕轨并挂载新生成字幕轨（输出 MKV，避免重编码画质损失）。
 
 ## API Overview
 
