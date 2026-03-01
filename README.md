@@ -117,6 +117,20 @@ REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
 ```
 
 
+
+### 4) 硬字幕 OCR（可选）
+
+如果视频没有内封字幕轨（画面里有“烧录字幕”），可在前端选择 **画面硬字幕 OCR（实验）** 模式。
+
+说明：
+- OCR 模式不依赖 `检测字幕轨` 结果。
+- worker 会按 `OCR_INTERVAL_SEC` 抽帧并用 `OCR_LANG` 识别（推荐中文场景设为 `chi_sim`，默认间隔 0.5 秒）。
+- 识别后仍会走 `zh/en/both` 过滤并输出 `.srt`。
+- 可调参数：`OCR_MIN_CONFIDENCE`（识别置信度阈值）、`OCR_PSM`（版面模式）、`OCR_CROP_BOTTOM_RATIO`（底部裁剪比例）、`OCR_MIN_STABLE_FRAMES`（最小稳定帧数）、`OCR_MAX_GAP_FRAMES`（允许中断帧数）。
+- 终极精度模式：支持 `OCR_ENGINE=http` 外接更强 OCR 服务（如 PaddleOCR/自建多模型服务），通过 `OCR_HTTP_URL` 配置接口地址，支持批量识别（`OCR_HTTP_BATCH_SIZE`）和超时控制（`OCR_HTTP_TIMEOUT_MS`）。
+- HTTP OCR 接口约定：`POST OCR_HTTP_URL`，请求体 `{ images: string[], lang, minConfidence, psm }`（`images` 为 base64 PNG 数组），响应体可为 `[{ text, confidence }]` 或 `{ results: [{ text, confidence }] }`。
+- 可选“输出新视频”模式：移除原字幕轨并挂载新生成字幕轨（输出 MKV，避免重编码画质损失）。
+
 ## API Overview
 
 - `POST /api/upload` upload video (`file` form-data)

@@ -39,6 +39,26 @@ export async function detectSubtitleStreams(inputPath) {
 }
 
 export async function extractSubtitle(inputPath, subtitleIndex, outputPath) {
-  const args = ['-y', '-i', inputPath, '-map', `0:s:${subtitleIndex}`, outputPath];
+  // subtitleIndex comes from ffprobe stream.index (global stream index),
+  // so ffmpeg mapping must use 0:<stream_index> instead of 0:s:<n>.
+  const args = ['-y', '-i', inputPath, '-map', `0:${subtitleIndex}`, outputPath];
+  await runCommand('ffmpeg', args);
+}
+
+
+export async function composeVideoWithSubtitle(inputPath, subtitlePath, outputVideoPath) {
+  const args = [
+    '-y',
+    '-i', inputPath,
+    '-i', subtitlePath,
+    '-map', '0:v',
+    '-map', '0:a?',
+    '-map', '1:0',
+    '-sn',
+    '-c:v', 'copy',
+    '-c:a', 'copy',
+    '-c:s', 'srt',
+    outputVideoPath
+  ];
   await runCommand('ffmpeg', args);
 }
