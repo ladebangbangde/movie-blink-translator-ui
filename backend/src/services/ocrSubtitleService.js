@@ -31,6 +31,8 @@ function normalizeLine(text) {
   return text
     .replace(/[|`~^_*<>]+/g, ' ')
     .replace(/\s+/g, ' ')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
     .trim();
 }
 
@@ -41,7 +43,7 @@ function isMostlyNoise(text) {
 
   const usefulMatches = compact.match(/[\p{Script=Han}A-Za-z0-9，。！？、：；“”‘’《》【】（）()\-—]/gu) || [];
   const usefulRatio = usefulMatches.length / compact.length;
-  return usefulRatio < 0.5;
+  return usefulRatio < 0.6;
 }
 
 function similarity(a, b) {
@@ -71,42 +73,120 @@ function similarity(a, b) {
 
 function parseTesseractTsv(tsv, minConfidence) {
   const rows = tsv.trim().split(/\r?\n/);
-  if (rows.length <= 1) return '';
+  if (rows.length <= 1) return { text: '', confidence: 0 };
 
   const words = [];
+  let confSum = 0;
+  let confCount = 0;
+
   for (let i = 1; i < rows.length; i += 1) {
     const cols = rows[i].split('\t');
     if (cols.length < 12) continue;
+
     const conf = Number.parseFloat(cols[10]);
-    const text = normalizeLine(cols[11] || '');
-    if (!text || Number.isNaN(conf) || conf < minConfidence) continue;
-    words.push(text);
+    const rawText = cols[11] || '';
+    const text = normalizeLine(rawText);
+    if (!text || Number.isNaN(conf)) continue;
+
+    if (conf >= minConfidence) {
+      words.push(text);
+      confSum += conf;
+      confCount += 1;
+    }
   }
 
-  return normalizeLine(words.join(' '));
+  const merged = normalizeLine(words.join(' '));
+  const confidence = confCount > 0 ? confSum / confCount : 0;
+  return { text: merged, confidence };
+}
+
+function chooseBestCandidate(candidates) {
+  const valid = candidates.filter((it) => it.text && !isMostlyNoise(it.text));
+  if (valid.length === 0) return { text: '', confidence: 0 };
+  valid.sort((a, b) => {
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    return b.text.length - a.text.length;
+  });
+  return valid[0];
+}
+
+function smoothFrameTexts(frames) {
+  if (frames.length < 3) return frames;
+  const out = [...frames];
+  for (let i = 1; i < frames.length - 1; i += 1) {
+    const prev = frames[i - 1].text;
+    const cur = frames[i].text;
+    const next = frames[i + 1].text;
+    if (!prev || !next) continue;
+    if (similarity(prev, next) > 0.9 && similarity(cur, prev) < 0.6) {
+      out[i] = { ...out[i], text: prev, confidence: (frames[i - 1].confidence + frames[i + 1].confidence) / 2 };
+    }
+  }
+  return out;
+}
+
+function buildSegmentsFromFrames(frames, fps, options) {
+  const minStableFrames = options.minStableFrames || Math.max(2, Math.round(fps * 0.35));
+  const maxGapFrames = options.maxGapFrames || Math.max(1, Math.round(fps * 0.25));
+
+  const segments = [];
+  let current = null;
+
+  for (let i = 0; i < frames.length; i += 1) {
+    const item = frames[i];
+    const text = item.text;
+
+    if (!text) {
+      if (current) {
+        current.gapFrames += 1;
+        if (current.gapFrames > maxGapFrames) {
+          if (current.frameCount >= minStableFrames) segments.push(current);
+          current = null;
+        }
+      }
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        text,
+        startFrame: i,
+        endFrame: i,
+        frameCount: 1,
+        gapFrames: 0
+      };
+      continue;
+    }
+
+    const sim = similarity(current.text, text);
+    if (sim >= 0.82) {
+      current.endFrame = i;
+      current.frameCount += 1;
+      current.gapFrames = 0;
+      if (text.length > current.text.length) current.text = text;
+    } else {
+      if (current.frameCount >= minStableFrames) segments.push(current);
+      current = {
+        text,
+        startFrame: i,
+        endFrame: i,
+        frameCount: 1,
+        gapFrames: 0
+      };
+    }
+  }
+
+  if (current && current.frameCount >= minStableFrames) segments.push(current);
+
+  return segments.map((seg) => ({
+    text: seg.text,
+    startSec: seg.startFrame / fps,
+    endSec: (seg.endFrame + 1) / fps
+  }));
 }
 
 function buildSrtBlocks(lines, minDurationSec) {
-  const merged = [];
-
-  for (const item of lines) {
-    const text = normalizeLine(item.text);
-    if (!text || isMostlyNoise(text)) continue;
-
-    const last = merged[merged.length - 1];
-    if (last) {
-      const sim = similarity(last.text, text);
-      if (sim >= 0.84 && item.startSec - last.endSec <= 1.0) {
-        last.endSec = item.endSec;
-        if (text.length > last.text.length) last.text = text;
-        continue;
-      }
-    }
-
-    merged.push({ ...item, text });
-  }
-
-  return merged
+  return lines
     .map((item, idx) => {
       const start = formatSrtTime(item.startSec);
       const end = formatSrtTime(Math.max(item.endSec, item.startSec + minDurationSec));
@@ -116,12 +196,13 @@ function buildSrtBlocks(lines, minDurationSec) {
 }
 
 export async function extractHardSubtitleWithOcr(inputPath, outputPath, options = {}) {
-  const intervalSec = options.intervalSec || 1.0;
-  const lang = options.lang || 'chi_sim+eng';
+  const intervalSec = options.intervalSec || 0.5;
+  const fps = 1 / intervalSec;
+  const lang = options.lang || 'chi_sim';
   const onProgress = options.onProgress;
   const minConfidence = options.minConfidence ?? 60;
   const psm = options.psm || 6;
-  const cropBottomRatio = options.cropBottomRatio || 0.35;
+  const cropBottomRatio = options.cropBottomRatio || 0.22;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mbt-ocr-'));
   const framePattern = path.join(tmpDir, 'frame-%06d.png');
@@ -131,7 +212,7 @@ export async function extractHardSubtitleWithOcr(inputPath, outputPath, options 
     await runCommand('ffmpeg', [
       '-y',
       '-i', inputPath,
-      '-vf', `fps=1/${intervalSec},${cropExpr},scale=1920:-1,format=gray,eq=contrast=1.35:brightness=0.02,unsharp=5:5:1.0:5:5:0.0`,
+      '-vf', `fps=${fps},${cropExpr},scale=1920:-1,format=gray,eq=contrast=1.45:brightness=0.03,unsharp=7:7:1.2:7:7:0.0`,
       '-q:v', '2',
       framePattern
     ]);
@@ -144,36 +225,41 @@ export async function extractHardSubtitleWithOcr(inputPath, outputPath, options 
       throw new Error('No frames extracted for OCR');
     }
 
-    const lines = [];
+    const frameTexts = [];
     for (let i = 0; i < frames.length; i += 1) {
       const framePath = path.join(tmpDir, frames[i]);
-      const { stdout } = await runCommand('tesseract', [
-        framePath,
-        'stdout',
-        '-l', lang,
-        '--psm', String(psm),
-        'tsv'
-      ]);
 
-      const text = parseTesseractTsv(stdout, minConfidence);
-      if (text && !isMostlyNoise(text)) {
-        lines.push({
-          text,
-          startSec: i * intervalSec,
-          endSec: (i + 1) * intervalSec
-        });
+      const candidates = [];
+      for (const currentPsm of new Set([psm, 7])) {
+        const { stdout } = await runCommand('tesseract', [
+          framePath,
+          'stdout',
+          '-l', lang,
+          '--psm', String(currentPsm),
+          'tsv'
+        ]);
+        candidates.push(parseTesseractTsv(stdout, minConfidence));
       }
+
+      const best = chooseBestCandidate(candidates);
+      frameTexts.push(best);
 
       if (typeof onProgress === 'function') {
         await onProgress(i + 1, frames.length);
       }
     }
 
-    if (lines.length === 0) {
-      throw new Error('OCR finished but no subtitle text recognized');
+    const smoothed = smoothFrameTexts(frameTexts);
+    const segments = buildSegmentsFromFrames(smoothed, fps, {
+      minStableFrames: options.minStableFrames,
+      maxGapFrames: options.maxGapFrames
+    });
+
+    if (segments.length === 0) {
+      throw new Error('OCR finished but no stable subtitle text recognized');
     }
 
-    const srt = buildSrtBlocks(lines, intervalSec);
+    const srt = buildSrtBlocks(segments, intervalSec);
     fs.writeFileSync(outputPath, srt, 'utf-8');
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -34,6 +34,8 @@ const worker = new Worker('subtitle-jobs', async (job) => {
       minConfidence: env.ocrMinConfidence,
       psm: env.ocrPsm,
       cropBottomRatio: env.ocrCropBottomRatio,
+      minStableFrames: env.ocrMinStableFrames,
+      maxGapFrames: env.ocrMaxGapFrames,
       onProgress: async (current, total) => {
         const ocrProgress = 10 + Math.floor((current / total) * 60);
         await job.updateProgress(Math.min(70, ocrProgress));

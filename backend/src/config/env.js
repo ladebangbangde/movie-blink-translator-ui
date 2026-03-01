@@ -23,9 +23,11 @@ export const env = {
   maxUploadSizeBytes: asInt(process.env.MAX_UPLOAD_SIZE_BYTES, 2 * 1024 * 1024 * 1024),
   workerConcurrency: asInt(process.env.WORKER_CONCURRENCY, 3),
   fileTtlHours: asInt(process.env.FILE_TTL_HOURS, 24),
-  ocrLang: process.env.OCR_LANG || 'chi_sim+eng',
-  ocrIntervalSec: asFloat(process.env.OCR_INTERVAL_SEC, 1),
+  ocrLang: process.env.OCR_LANG || 'chi_sim',
+  ocrIntervalSec: asFloat(process.env.OCR_INTERVAL_SEC, 0.5),
   ocrMinConfidence: asInt(process.env.OCR_MIN_CONFIDENCE, 60),
   ocrPsm: asInt(process.env.OCR_PSM, 6),
-  ocrCropBottomRatio: asFloat(process.env.OCR_CROP_BOTTOM_RATIO, 0.35)
+  ocrCropBottomRatio: asFloat(process.env.OCR_CROP_BOTTOM_RATIO, 0.22),
+  ocrMinStableFrames: asInt(process.env.OCR_MIN_STABLE_FRAMES, 2),
+  ocrMaxGapFrames: asInt(process.env.OCR_MAX_GAP_FRAMES, 1)
 };
