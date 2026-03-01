@@ -3,7 +3,7 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg \
+  && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
