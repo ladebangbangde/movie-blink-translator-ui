@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'bullmq';
 import { connection } from '../queue/subtitleQueue.js';
-import { extractSubtitle } from '../services/ffmpegService.js';
+import { extractSubtitle, composeVideoWithSubtitle } from '../services/ffmpegService.js';
 import { filterAssContent, filterSrtContent } from '../services/subtitleParser.js';
 import { cleanupOlderThanHours } from '../services/storageService.js';
 import { extractHardSubtitleWithOcr } from '../services/ocrSubtitleService.js';
@@ -14,7 +14,7 @@ function resolveInputPath(fileId) {
 }
 
 const worker = new Worker('subtitle-jobs', async (job) => {
-  const { fileId, subtitleIndex, mode, source = 'embedded' } = job.data;
+  const { fileId, subtitleIndex, mode, source = 'embedded', outputVideo = false } = job.data;
   const inputPath = resolveInputPath(fileId);
   if (!inputPath) {
     throw new Error('Input file not found');
@@ -31,6 +31,15 @@ const worker = new Worker('subtitle-jobs', async (job) => {
     await extractHardSubtitleWithOcr(inputPath, rawOutputPath, {
       intervalSec: env.ocrIntervalSec,
       lang: env.ocrLang,
+      minConfidence: env.ocrMinConfidence,
+      psm: env.ocrPsm,
+      cropBottomRatio: env.ocrCropBottomRatio,
+      minStableFrames: env.ocrMinStableFrames,
+      maxGapFrames: env.ocrMaxGapFrames,
+      ocrEngine: env.ocrEngine,
+      ocrHttpUrl: env.ocrHttpUrl,
+      ocrHttpTimeoutMs: env.ocrHttpTimeoutMs,
+      ocrHttpBatchSize: env.ocrHttpBatchSize,
       onProgress: async (current, total) => {
         const ocrProgress = 10 + Math.floor((current / total) * 60);
         await job.updateProgress(Math.min(70, ocrProgress));
@@ -48,8 +57,14 @@ const worker = new Worker('subtitle-jobs', async (job) => {
   fs.writeFileSync(finalOutputPath, filtered, 'utf-8');
   fs.rmSync(rawOutputPath, { force: true });
 
+  let outputVideoPath = null;
+  if (outputVideo) {
+    outputVideoPath = path.join(env.outputDir, `${job.id}.mkv`);
+    await composeVideoWithSubtitle(inputPath, finalOutputPath, outputVideoPath);
+  }
+
   await job.updateProgress(100);
-  return { output: finalOutputPath, source };
+  return { output: finalOutputPath, outputVideo: outputVideoPath, source };
 }, {
   connection,
   concurrency: env.workerConcurrency
