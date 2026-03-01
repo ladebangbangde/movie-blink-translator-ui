@@ -10,15 +10,17 @@ const router = express.Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { fileId, subtitleIndex, mode = 'both' } = req.body;
+    const { fileId, subtitleIndex, mode = 'both', source = 'embedded' } = req.body;
     if (!fileId && fileId !== 0) throw new ApiError('fileId is required', 400);
-    if (typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
+    if (!['embedded', 'ocr'].includes(source)) throw new ApiError('invalid source', 400);
+    if (source === 'embedded' && typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
     if (!['zh', 'en', 'both'].includes(mode)) throw new ApiError('invalid mode', 400);
 
     const job = await subtitleQueue.add('subtitle-process', {
       fileId,
-      subtitleIndex,
-      mode
+      subtitleIndex: source === 'embedded' ? subtitleIndex : null,
+      mode,
+      source
     }, {
       removeOnComplete: 50,
       removeOnFail: 50
@@ -35,9 +37,17 @@ router.get('/jobs/:jobId', async (req, res, next) => {
     const job = await subtitleQueue.getJob(req.params.jobId);
     if (!job) throw new ApiError('job not found', 404);
 
+    res.setHeader('Cache-Control', 'no-store');
     const state = await job.getState();
     const progress = typeof job.progress === 'number' ? job.progress : 0;
-    res.json({ status: state, progress });
+    const failedReason = state === 'failed' ? (job.failedReason || 'unknown error') : null;
+    const outputPath = state === 'completed' && job.returnvalue?.output ? job.returnvalue.output : null;
+    res.json({
+      status: state,
+      progress,
+      failedReason,
+      outputPath
+    });
   } catch (err) {
     next(err);
   }

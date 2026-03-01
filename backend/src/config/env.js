@@ -17,5 +17,7 @@ export const env = {
   outputDir: path.resolve(process.env.OUTPUT_DIR || `${rootStorageDir}/outputs`),
   maxUploadSizeBytes: asInt(process.env.MAX_UPLOAD_SIZE_BYTES, 2 * 1024 * 1024 * 1024),
   workerConcurrency: asInt(process.env.WORKER_CONCURRENCY, 3),
-  fileTtlHours: asInt(process.env.FILE_TTL_HOURS, 24)
+  fileTtlHours: asInt(process.env.FILE_TTL_HOURS, 24),
+  ocrLang: process.env.OCR_LANG || 'chi_sim+eng',
+  ocrIntervalSec: asInt(process.env.OCR_INTERVAL_SEC, 2)
 };

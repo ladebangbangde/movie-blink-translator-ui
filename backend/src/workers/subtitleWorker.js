@@ -5,6 +5,7 @@ import { connection } from '../queue/subtitleQueue.js';
 import { extractSubtitle } from '../services/ffmpegService.js';
 import { filterAssContent, filterSrtContent } from '../services/subtitleParser.js';
 import { cleanupOlderThanHours } from '../services/storageService.js';
+import { extractHardSubtitleWithOcr } from '../services/ocrSubtitleService.js';
 import { env } from '../config/env.js';
 
 function resolveInputPath(fileId) {
@@ -13,7 +14,7 @@ function resolveInputPath(fileId) {
 }
 
 const worker = new Worker('subtitle-jobs', async (job) => {
-  const { fileId, subtitleIndex, mode } = job.data;
+  const { fileId, subtitleIndex, mode, source = 'embedded' } = job.data;
   const inputPath = resolveInputPath(fileId);
   if (!inputPath) {
     throw new Error('Input file not found');
@@ -26,7 +27,20 @@ const worker = new Worker('subtitle-jobs', async (job) => {
   const rawOutputPath = path.join(env.outputDir, `${job.id}-raw${ext}`);
   const finalOutputPath = path.join(env.outputDir, `${job.id}${ext}`);
 
-  await extractSubtitle(inputPath, subtitleIndex, rawOutputPath);
+  if (source === 'ocr') {
+    await extractHardSubtitleWithOcr(inputPath, rawOutputPath, {
+      intervalSec: env.ocrIntervalSec,
+      lang: env.ocrLang,
+      onProgress: async (current, total) => {
+        const ocrProgress = 10 + Math.floor((current / total) * 60);
+        await job.updateProgress(Math.min(70, ocrProgress));
+      }
+    });
+  } else {
+    await extractSubtitle(inputPath, subtitleIndex, rawOutputPath);
+    await job.updateProgress(70);
+  }
+
   await job.updateProgress(70);
 
   const rawContent = fs.readFileSync(rawOutputPath, 'utf-8');
@@ -35,7 +49,7 @@ const worker = new Worker('subtitle-jobs', async (job) => {
   fs.rmSync(rawOutputPath, { force: true });
 
   await job.updateProgress(100);
-  return { output: finalOutputPath };
+  return { output: finalOutputPath, source };
 }, {
   connection,
   concurrency: env.workerConcurrency
