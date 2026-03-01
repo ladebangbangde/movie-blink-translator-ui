@@ -6,6 +6,11 @@ function asInt(value, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function asFloat(value, fallback) {
+  const parsed = Number.parseFloat(value ?? '');
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 const rootStorageDir = process.env.STORAGE_DIR || 'storage';
 
 export const env = {
@@ -19,5 +24,8 @@ export const env = {
   workerConcurrency: asInt(process.env.WORKER_CONCURRENCY, 3),
   fileTtlHours: asInt(process.env.FILE_TTL_HOURS, 24),
   ocrLang: process.env.OCR_LANG || 'chi_sim+eng',
-  ocrIntervalSec: asInt(process.env.OCR_INTERVAL_SEC, 2)
+  ocrIntervalSec: asFloat(process.env.OCR_INTERVAL_SEC, 1),
+  ocrMinConfidence: asInt(process.env.OCR_MIN_CONFIDENCE, 60),
+  ocrPsm: asInt(process.env.OCR_PSM, 6),
+  ocrCropBottomRatio: asFloat(process.env.OCR_CROP_BOTTOM_RATIO, 0.35)
 };
