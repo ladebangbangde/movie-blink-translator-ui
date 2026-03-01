@@ -8,14 +8,26 @@ function runCommand(bin, args) {
     const child = spawn(bin, args);
     let stdout = '';
     let stderr = '';
+
     child.stdout.on('data', (buf) => { stdout += buf.toString(); });
     child.stderr.on('data', (buf) => { stderr += buf.toString(); });
+
+    child.on('error', (err) => {
+      reject(new Error(`${bin} spawn error: ${err.message}`));
+    });
+
     child.on('close', (code) => {
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(`${bin} failed: ${stderr}`));
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const stdoutMsg = stdout.trim() ? ` stdout: ${stdout.trim()}` : '';
+      const stderrMsg = stderr.trim() ? ` stderr: ${stderr.trim()}` : '';
+      reject(new Error(`${bin} failed (code=${code}) args=[${args.join(' ')}].${stdoutMsg}${stderrMsg}`));
     });
   });
 }
+
 
 function formatSrtTime(sec) {
   const s = Math.max(0, sec);
@@ -197,16 +209,31 @@ function buildSrtBlocks(lines, minDurationSec) {
 
 async function recognizeFrameWithTesseract(framePath, { lang, psm, minConfidence }) {
   const candidates = [];
-  for (const currentPsm of new Set([psm, 7])) {
-    const { stdout } = await runCommand('tesseract', [
-      framePath,
-      'stdout',
-      '-l', lang,
-      '--psm', String(currentPsm),
-      'tsv'
-    ]);
-    candidates.push(parseTesseractTsv(stdout, minConfidence));
+  const warnings = [];
+  const languages = new Set([lang, 'eng']);
+
+  for (const language of languages) {
+    for (const currentPsm of new Set([psm, 7])) {
+      try {
+        const { stdout } = await runCommand('tesseract', [
+          framePath,
+          'stdout',
+          '-l', language,
+          '--psm', String(currentPsm),
+          'tsv'
+        ]);
+        candidates.push(parseTesseractTsv(stdout, minConfidence));
+      } catch (err) {
+        warnings.push(`${language}/psm${currentPsm}: ${err.message}`);
+      }
+    }
   }
+
+  if (candidates.length === 0 && warnings.length > 0) {
+    console.warn(`OCR warning on ${path.basename(framePath)}: ${warnings[0]}`);
+    return { text: '', confidence: 0 };
+  }
+
   return chooseBestCandidate(candidates);
 }
 
