@@ -12,6 +12,8 @@ const uploadProgress = ref(0);
 const jobId = ref('');
 const jobStatus = ref('idle');
 const progress = ref(0);
+const failedReason = ref('');
+const outputPath = ref('');
 
 const canCreateJob = computed(() => fileId.value && subtitleIndex.value !== null);
 
@@ -47,11 +49,22 @@ async function onCreateJob() {
     });
     jobId.value = String(result.jobId);
     jobStatus.value = 'pending';
+    failedReason.value = '';
+    outputPath.value = '';
     pollJob();
   } catch (error) {
     ElMessage.error(error.response?.data?.message || '任务创建失败');
   }
 }
+
+const statusLabelMap = {
+  idle: '未开始',
+  pending: '排队中',
+  waiting: '等待中',
+  active: '处理中',
+  completed: '已完成',
+  failed: '失败'
+};
 
 async function pollJob() {
   if (!jobId.value) return;
@@ -59,7 +72,15 @@ async function pollJob() {
     const result = await queryJob(jobId.value);
     jobStatus.value = result.status;
     progress.value = result.progress;
+    failedReason.value = result.failedReason || '';
+    outputPath.value = result.outputPath || '';
     if (['completed', 'failed'].includes(result.status)) {
+      if (result.status === 'completed') {
+        ElMessage.success('字幕处理完成，可点击下载');
+      }
+      if (result.status === 'failed') {
+        ElMessage.error(result.failedReason || '字幕处理失败');
+      }
       clearInterval(timer);
     }
   }, 1500);
@@ -102,10 +123,16 @@ async function pollJob() {
       <el-button type="success" :disabled="!canCreateJob" @click="onCreateJob">创建任务</el-button>
 
       <el-progress :percentage="progress" style="margin-top: 12px" />
-      <div style="margin-top: 8px">任务状态：{{ jobStatus }}</div>
+      <div style="margin-top: 8px">任务ID：{{ jobId || '—' }}</div>
+      <div style="margin-top: 8px">任务状态：{{ statusLabelMap[jobStatus] || jobStatus }}</div>
+      <div v-if="outputPath" style="margin-top: 8px">服务端输出位置：{{ outputPath }}</div>
+      <div v-if="failedReason" style="margin-top: 8px; color: #f56c6c">失败原因：{{ failedReason }}</div>
       <el-link v-if="jobStatus === 'completed'" :href="getDownloadUrl(jobId)" target="_blank">
         下载字幕文件
       </el-link>
+      <div v-if="jobStatus === 'completed'" style="margin-top: 8px">
+        下载链接：{{ getDownloadUrl(jobId) }}
+      </div>
     </el-card>
   </div>
 </template>

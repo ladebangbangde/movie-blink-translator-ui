@@ -37,7 +37,14 @@ router.get('/jobs/:jobId', async (req, res, next) => {
 
     const state = await job.getState();
     const progress = typeof job.progress === 'number' ? job.progress : 0;
-    res.json({ status: state, progress });
+    const failedReason = state === 'failed' ? (job.failedReason || 'unknown error') : null;
+    const outputPath = state === 'completed' && job.returnvalue?.output ? job.returnvalue.output : null;
+    res.json({
+      status: state,
+      progress,
+      failedReason,
+      outputPath
+    });
   } catch (err) {
     next(err);
   }
