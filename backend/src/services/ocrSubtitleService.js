@@ -55,8 +55,9 @@ function buildSrtBlocks(lines, intervalSec) {
 }
 
 export async function extractHardSubtitleWithOcr(inputPath, outputPath, options = {}) {
-  const intervalSec = options.intervalSec || 1;
+  const intervalSec = options.intervalSec || 2;
   const lang = options.lang || 'chi_sim+eng';
+  const onProgress = options.onProgress;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mbt-ocr-'));
   const framePattern = path.join(tmpDir, 'frame-%06d.png');
@@ -89,6 +90,10 @@ export async function extractHardSubtitleWithOcr(inputPath, outputPath, options 
         startSec: i * intervalSec,
         endSec: (i + 1) * intervalSec
       });
+
+      if (typeof onProgress === 'function') {
+        await onProgress(i + 1, frames.length);
+      }
     }
 
     if (lines.length === 0) {

@@ -37,6 +37,7 @@ router.get('/jobs/:jobId', async (req, res, next) => {
     const job = await subtitleQueue.getJob(req.params.jobId);
     if (!job) throw new ApiError('job not found', 404);
 
+    res.setHeader('Cache-Control', 'no-store');
     const state = await job.getState();
     const progress = typeof job.progress === 'number' ? job.progress : 0;
     const failedReason = state === 'failed' ? (job.failedReason || 'unknown error') : null;

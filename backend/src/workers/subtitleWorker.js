@@ -30,10 +30,15 @@ const worker = new Worker('subtitle-jobs', async (job) => {
   if (source === 'ocr') {
     await extractHardSubtitleWithOcr(inputPath, rawOutputPath, {
       intervalSec: env.ocrIntervalSec,
-      lang: env.ocrLang
+      lang: env.ocrLang,
+      onProgress: async (current, total) => {
+        const ocrProgress = 10 + Math.floor((current / total) * 60);
+        await job.updateProgress(Math.min(70, ocrProgress));
+      }
     });
   } else {
     await extractSubtitle(inputPath, subtitleIndex, rawOutputPath);
+    await job.updateProgress(70);
   }
 
   await job.updateProgress(70);

@@ -19,5 +19,5 @@ export const env = {
   workerConcurrency: asInt(process.env.WORKER_CONCURRENCY, 3),
   fileTtlHours: asInt(process.env.FILE_TTL_HOURS, 24),
   ocrLang: process.env.OCR_LANG || 'chi_sim+eng',
-  ocrIntervalSec: asInt(process.env.OCR_INTERVAL_SEC, 1)
+  ocrIntervalSec: asInt(process.env.OCR_INTERVAL_SEC, 2)
 };
