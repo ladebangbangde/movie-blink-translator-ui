@@ -42,12 +42,16 @@ router.get('/jobs/:jobId', async (req, res, next) => {
     const state = await job.getState();
     const progress = typeof job.progress === 'number' ? job.progress : 0;
     const failedReason = state === 'failed' ? (job.failedReason || 'unknown error') : null;
+    const failedStack = state === 'failed' && Array.isArray(job.stacktrace)
+      ? job.stacktrace.join('\n')
+      : null;
     const outputPath = state === 'completed' && job.returnvalue?.output ? job.returnvalue.output : null;
     const outputVideoPath = state === 'completed' && job.returnvalue?.outputVideo ? job.returnvalue.outputVideo : null;
     res.json({
       status: state,
       progress,
       failedReason,
+      failedStack,
       outputPath,
       outputVideoPath
     });
