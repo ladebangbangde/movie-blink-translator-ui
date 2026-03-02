@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { ElMessage } from 'element-plus';
 import { uploadMovie, detectSubtitles, createJob, queryJob, getDownloadUrl } from '../api/client';
 
@@ -10,15 +10,39 @@ const subtitleIndex = ref(null);
 const mode = ref('both');
 const source = ref('embedded');
 const uploadProgress = ref(0);
-const jobId = ref('');
-const jobStatus = ref('idle');
-const progress = ref(0);
-const failedReason = ref('');
-const outputPath = ref('');
-const outputVideoPath = ref('');
 const outputVideo = ref(false);
+const tasks = ref([]);
 
 const canCreateJob = computed(() => fileId.value && (source.value === 'ocr' || subtitleIndex.value !== null));
+
+const statusLabelMap = {
+  idle: '未开始',
+  pending: '排队中',
+  waiting: '等待中',
+  active: '处理中',
+  completed: '已完成',
+  failed: '失败'
+};
+
+function formatTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+}
+
+function createTaskCard({ jobId, fileName, createdAt }) {
+  return {
+    jobId: String(jobId),
+    fileName: fileName || file.value?.name || 'unknown',
+    createdAt: createdAt || Date.now(),
+    status: 'pending',
+    progress: 0,
+    failedReason: '',
+    failedStack: '',
+    outputPath: '',
+    outputVideoPath: ''
+  };
+}
 
 async function onSelectUpload(uploadFile) {
   try {
@@ -50,52 +74,47 @@ async function onCreateJob() {
       subtitleIndex: subtitleIndex.value,
       mode: mode.value,
       source: source.value,
-      outputVideo: outputVideo.value
+      outputVideo: outputVideo.value,
+      fileName: file.value?.name || ''
     });
-    jobId.value = String(result.jobId);
-    jobStatus.value = 'pending';
-    failedReason.value = '';
-    outputPath.value = '';
-    outputVideoPath.value = '';
-    pollJob();
+
+    const task = createTaskCard(result);
+    tasks.value.unshift(task);
+    ElMessage.success(`任务 ${task.jobId} 已创建`);
   } catch (error) {
     ElMessage.error(error.response?.data?.message || '任务创建失败');
   }
 }
 
-const statusLabelMap = {
-  idle: '未开始',
-  pending: '排队中',
-  waiting: '等待中',
-  active: '处理中',
-  completed: '已完成',
-  failed: '失败'
-};
+let polling = null;
 
-async function pollJob() {
-  if (!jobId.value) return;
-  const timer = setInterval(async () => {
-    const result = await queryJob(jobId.value);
-    jobStatus.value = result.status;
-    progress.value = result.progress;
-    failedReason.value = result.failedReason || '';
-    outputPath.value = result.outputPath || '';
-    outputVideoPath.value = result.outputVideoPath || '';
-    if (['completed', 'failed'].includes(result.status)) {
-      if (result.status === 'completed') {
-        ElMessage.success('字幕处理完成，可点击下载');
-      }
-      if (result.status === 'failed') {
-        ElMessage.error(result.failedReason || '字幕处理失败');
-      }
-      clearInterval(timer);
+async function pollAllJobs() {
+  const runningTasks = tasks.value.filter((t) => !['completed', 'failed'].includes(t.status));
+  await Promise.all(runningTasks.map(async (task) => {
+    try {
+      const result = await queryJob(task.jobId);
+      task.status = result.status;
+      task.progress = result.progress ?? 0;
+      task.failedReason = result.failedReason || '';
+      task.failedStack = result.failedStack || '';
+      task.outputPath = result.outputPath || '';
+      task.outputVideoPath = result.outputVideoPath || '';
+      task.fileName = result.fileName || task.fileName;
+      task.createdAt = result.createdAt || task.createdAt;
+    } catch (error) {
+      task.failedReason = error.response?.data?.message || '任务状态查询失败';
     }
-  }, 1500);
+  }));
 }
+
+polling = setInterval(pollAllJobs, 1500);
+onBeforeUnmount(() => {
+  if (polling) clearInterval(polling);
+});
 </script>
 
 <template>
-  <div style="max-width: 820px; margin: 40px auto">
+  <div style="max-width: 980px; margin: 40px auto">
     <el-card>
       <template #header>Movie Blink Translator MVP</template>
       <el-steps :active="3" finish-status="success" style="margin-bottom: 24px">
@@ -110,7 +129,6 @@ async function pollJob() {
       <el-progress :percentage="uploadProgress" style="margin-top: 12px" />
 
       <el-divider />
-
 
       <el-radio-group v-model="source" style="margin: 8px 0 12px 0">
         <el-radio-button label="embedded">内封字幕轨</el-radio-button>
@@ -139,18 +157,31 @@ async function pollJob() {
       </el-checkbox>
 
       <el-button type="success" :disabled="!canCreateJob" @click="onCreateJob">创建任务</el-button>
+    </el-card>
 
-      <el-progress :percentage="progress" style="margin-top: 12px" />
-      <div style="margin-top: 8px">任务ID：{{ jobId || '—' }}</div>
-      <div style="margin-top: 8px">任务状态：{{ statusLabelMap[jobStatus] || jobStatus }}</div>
-      <div v-if="outputPath" style="margin-top: 8px">字幕输出位置：{{ outputPath }}</div>
-      <div v-if="outputVideoPath" style="margin-top: 8px">视频输出位置：{{ outputVideoPath }}</div>
-      <div v-if="failedReason" style="margin-top: 8px; color: #f56c6c">失败原因：{{ failedReason }}</div>
-      <el-link v-if="jobStatus === 'completed'" :href="getDownloadUrl(jobId)" target="_blank">
-        下载输出文件
-      </el-link>
-      <div v-if="jobStatus === 'completed'" style="margin-top: 8px">
-        下载链接：{{ getDownloadUrl(jobId) }}
+    <el-card style="margin-top: 16px">
+      <template #header>任务列表（按文件名 + 时间戳独立）</template>
+      <el-empty v-if="tasks.length === 0" description="暂无任务" />
+      <div v-for="task in tasks" :key="task.jobId" style="border: 1px solid #ebeef5; border-radius: 8px; padding: 12px; margin-bottom: 12px">
+        <div><b>文件：</b>{{ task.fileName }}</div>
+        <div><b>创建时间：</b>{{ formatTime(task.createdAt) }}</div>
+        <div><b>任务ID：</b>{{ task.jobId }}</div>
+        <div><b>状态：</b>{{ statusLabelMap[task.status] || task.status }}</div>
+        <el-progress :percentage="task.progress" style="margin: 8px 0" />
+        <div v-if="task.outputPath"><b>字幕输出：</b>{{ task.outputPath }}</div>
+        <div v-if="task.outputVideoPath"><b>视频输出：</b>{{ task.outputVideoPath }}</div>
+        <div v-if="task.failedReason" style="margin-top: 8px; color: #f56c6c"><b>失败原因：</b>{{ task.failedReason }}</div>
+        <el-input
+          v-if="task.failedStack"
+          type="textarea"
+          :rows="4"
+          :model-value="task.failedStack"
+          readonly
+          style="margin-top: 8px"
+        />
+        <el-link v-if="task.status === 'completed'" :href="getDownloadUrl(task.jobId)" target="_blank" style="margin-top: 8px">
+          下载输出文件
+        </el-link>
       </div>
     </el-card>
   </div>

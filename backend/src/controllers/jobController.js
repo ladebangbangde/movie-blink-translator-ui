@@ -10,7 +10,7 @@ const router = express.Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { fileId, subtitleIndex, mode = 'both', source = 'embedded', outputVideo = false } = req.body;
+    const { fileId, subtitleIndex, mode = 'both', source = 'embedded', outputVideo = false, fileName = '' } = req.body;
     if (!fileId && fileId !== 0) throw new ApiError('fileId is required', 400);
     if (!['embedded', 'ocr'].includes(source)) throw new ApiError('invalid source', 400);
     if (source === 'embedded' && typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
@@ -21,13 +21,19 @@ router.post('/jobs', async (req, res, next) => {
       subtitleIndex: source === 'embedded' ? subtitleIndex : null,
       mode,
       source,
-      outputVideo: Boolean(outputVideo)
+      outputVideo: Boolean(outputVideo),
+      fileName: String(fileName || '')
     }, {
       removeOnComplete: 50,
       removeOnFail: 50
     });
 
-    res.json({ jobId: job.id, status: 'pending' });
+    res.json({
+      jobId: job.id,
+      status: 'pending',
+      createdAt: job.timestamp,
+      fileName: String(fileName || '')
+    });
   } catch (err) {
     next(err);
   }
@@ -46,6 +52,8 @@ router.get('/jobs/:jobId', async (req, res, next) => {
       ? job.stacktrace.join('\n')
       : null;
     const outputPath = state === 'completed' && job.returnvalue?.output ? job.returnvalue.output : null;
+    const fileName = job.data?.fileName || null;
+    const createdAt = job.timestamp || null;
     const outputVideoPath = state === 'completed' && job.returnvalue?.outputVideo ? job.returnvalue.outputVideo : null;
     res.json({
       status: state,
@@ -53,7 +61,9 @@ router.get('/jobs/:jobId', async (req, res, next) => {
       failedReason,
       failedStack,
       outputPath,
-      outputVideoPath
+      outputVideoPath,
+      fileName,
+      createdAt
     });
   } catch (err) {
     next(err);
