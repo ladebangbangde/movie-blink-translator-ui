@@ -10,21 +10,30 @@ const router = express.Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { fileId, subtitleIndex, mode = 'both' } = req.body;
+    const { fileId, subtitleIndex, mode = 'both', source = 'embedded', outputVideo = false, fileName = '' } = req.body;
     if (!fileId && fileId !== 0) throw new ApiError('fileId is required', 400);
-    if (typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
+    if (!['embedded', 'ocr'].includes(source)) throw new ApiError('invalid source', 400);
+    if (source === 'embedded' && typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
     if (!['zh', 'en', 'both'].includes(mode)) throw new ApiError('invalid mode', 400);
 
     const job = await subtitleQueue.add('subtitle-process', {
       fileId,
-      subtitleIndex,
-      mode
+      subtitleIndex: source === 'embedded' ? subtitleIndex : null,
+      mode,
+      source,
+      outputVideo: Boolean(outputVideo),
+      fileName: String(fileName || '')
     }, {
       removeOnComplete: 50,
       removeOnFail: 50
     });
 
-    res.json({ jobId: job.id, status: 'pending' });
+    res.json({
+      jobId: job.id,
+      status: 'pending',
+      createdAt: job.timestamp,
+      fileName: String(fileName || '')
+    });
   } catch (err) {
     next(err);
   }
@@ -35,9 +44,30 @@ router.get('/jobs/:jobId', async (req, res, next) => {
     const job = await subtitleQueue.getJob(req.params.jobId);
     if (!job) throw new ApiError('job not found', 404);
 
+    res.setHeader('Cache-Control', 'no-store');
     const state = await job.getState();
     const progress = typeof job.progress === 'number' ? job.progress : 0;
-    res.json({ status: state, progress });
+    const failedReason = state === 'failed' ? (job.failedReason || 'unknown error') : null;
+    const failedStack = state === 'failed' && Array.isArray(job.stacktrace)
+      ? job.stacktrace.join('\n')
+      : null;
+    const outputPath = state === 'completed' && job.returnvalue?.output ? job.returnvalue.output : null;
+    const fileName = job.data?.fileName || null;
+    const createdAt = job.timestamp || null;
+    const outputVideoPath = state === 'completed' && job.returnvalue?.outputVideo ? job.returnvalue.outputVideo : null;
+    const logResult = await job.getLogs(0, 300, true);
+    const logs = Array.isArray(logResult?.logs) ? logResult.logs : [];
+    res.json({
+      status: state,
+      progress,
+      failedReason,
+      failedStack,
+      outputPath,
+      outputVideoPath,
+      fileName,
+      createdAt,
+      logs
+    });
   } catch (err) {
     next(err);
   }
@@ -46,7 +76,14 @@ router.get('/jobs/:jobId', async (req, res, next) => {
 router.get('/download/:jobId', async (req, res, next) => {
   try {
     const jobId = req.params.jobId;
-    const candidates = ['.srt', '.ass'].map((ext) => path.join(env.outputDir, `${jobId}${ext}`));
+    const job = await subtitleQueue.getJob(jobId);
+
+    const preferred = job?.returnvalue?.outputVideo || job?.returnvalue?.output || null;
+    const candidates = [
+      preferred,
+      ...['.mkv', '.mp4', '.srt', '.ass'].map((ext) => path.join(env.outputDir, `${jobId}${ext}`))
+    ].filter(Boolean);
+
     const outputPath = candidates.find((candidate) => fs.existsSync(candidate));
     if (!outputPath) throw new ApiError('file not found', 404);
 
