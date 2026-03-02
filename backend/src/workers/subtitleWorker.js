@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'bullmq';
 import { connection } from '../queue/subtitleQueue.js';
-import { extractSubtitle, composeVideoWithSubtitle } from '../services/ffmpegService.js';
+import { extractSubtitle, composeVideoWithSubtitle, trimVideoForDemo } from '../services/ffmpegService.js';
 import { filterAssContent, filterSrtContent } from '../services/subtitleParser.js';
 import { cleanupOlderThanHours } from '../services/storageService.js';
 import { extractHardSubtitleWithOcr } from '../services/ocrSubtitleService.js';
@@ -14,10 +14,11 @@ function resolveInputPath(fileId) {
 }
 
 const worker = new Worker('subtitle-jobs', async (job) => {
-  const { fileId, subtitleIndex, mode, source = 'embedded', outputVideo = false } = job.data;
+  const { fileId, subtitleIndex, mode, source = 'embedded', outputVideo = false, demoMode = false } = job.data;
+  let demoClipPath = null;
 
   try {
-    await job.log(`job started: source=${source}, mode=${mode}, outputVideo=${Boolean(outputVideo)}`);
+    await job.log(`job started: source=${source}, mode=${mode}, outputVideo=${Boolean(outputVideo)}, demoMode=${Boolean(demoMode)}`);
 
     const inputPath = resolveInputPath(fileId);
     if (!inputPath) {
@@ -25,6 +26,15 @@ const worker = new Worker('subtitle-jobs', async (job) => {
     }
 
     await job.log(`input resolved: ${inputPath}`);
+    let processingInputPath = inputPath;
+    if (demoMode) {
+      demoClipPath = path.join(env.outputDir, `${job.id}-demo-input.mp4`);
+      await job.log(`demo mode enabled: trimming first ${env.demoDurationSec}s`);
+      await trimVideoForDemo(inputPath, demoClipPath, env.demoDurationSec);
+      processingInputPath = demoClipPath;
+      await job.log(`demo clip generated: ${demoClipPath}`);
+    }
+
     cleanupOlderThanHours(env.fileTtlHours);
     await job.updateProgress(10);
 
@@ -34,7 +44,7 @@ const worker = new Worker('subtitle-jobs', async (job) => {
 
     if (source === 'ocr') {
       await job.log(`ocr started: engine=${env.ocrEngine}, lang=${env.ocrLang}, interval=${env.ocrIntervalSec}s`);
-      await extractHardSubtitleWithOcr(inputPath, rawOutputPath, {
+      await extractHardSubtitleWithOcr(processingInputPath, rawOutputPath, {
         intervalSec: env.ocrIntervalSec,
         lang: env.ocrLang,
         minConfidence: env.ocrMinConfidence,
@@ -57,7 +67,7 @@ const worker = new Worker('subtitle-jobs', async (job) => {
       await job.log(`ocr output generated: ${rawOutputPath}`);
     } else {
       await job.log(`embedded extraction started: subtitleIndex=${subtitleIndex}`);
-      await extractSubtitle(inputPath, subtitleIndex, rawOutputPath);
+      await extractSubtitle(processingInputPath, subtitleIndex, rawOutputPath);
       await job.updateProgress(70);
       await job.log(`embedded subtitle extracted: ${rawOutputPath}`);
     }
@@ -74,15 +84,17 @@ const worker = new Worker('subtitle-jobs', async (job) => {
     if (outputVideo) {
       outputVideoPath = path.join(env.outputDir, `${job.id}.mkv`);
       await job.log('video composition started');
-      await composeVideoWithSubtitle(inputPath, finalOutputPath, outputVideoPath);
+      await composeVideoWithSubtitle(processingInputPath, finalOutputPath, outputVideoPath);
       await job.log(`video composition completed: ${outputVideoPath}`);
     }
 
     await job.updateProgress(100);
     await job.log('job completed');
-    return { output: finalOutputPath, outputVideo: outputVideoPath, source };
+    if (demoClipPath) fs.rmSync(demoClipPath, { force: true });
+    return { output: finalOutputPath, outputVideo: outputVideoPath, source, demoMode: Boolean(demoMode), demoDurationSec: env.demoDurationSec };
   } catch (err) {
     await job.log(`job failed: ${err.message}`);
+    if (typeof demoClipPath !== 'undefined' && demoClipPath) fs.rmSync(demoClipPath, { force: true });
     throw err;
   }
 }, {

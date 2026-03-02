@@ -131,6 +131,7 @@ REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
 - HTTP OCR 接口约定：`POST OCR_HTTP_URL`，请求体 `{ images: string[], lang, minConfidence, psm }`（`images` 为 base64 PNG 数组），响应体可为 `[{ text, confidence }]` 或 `{ results: [{ text, confidence }] }`。
 - 可选“输出新视频”模式：移除原字幕轨并挂载新生成字幕轨（输出 MKV，避免重编码画质损失）。
 - OCR 还会额外输出同名 `*.timeline.json`（每段字幕的时间轴），便于你核对“识别文本-视频时间”对应关系。
+- 支持 Demo 开关：只截取前 `DEMO_DURATION_SEC`（默认 120 秒）进行识别，便于先快速评估识别准确率。
 
 ## API Overview
 

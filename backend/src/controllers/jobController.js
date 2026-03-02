@@ -10,7 +10,7 @@ const router = express.Router();
 
 router.post('/jobs', async (req, res, next) => {
   try {
-    const { fileId, subtitleIndex, mode = 'both', source = 'embedded', outputVideo = false, fileName = '' } = req.body;
+    const { fileId, subtitleIndex, mode = 'both', source = 'embedded', outputVideo = false, fileName = '', demoMode = false } = req.body;
     if (!fileId && fileId !== 0) throw new ApiError('fileId is required', 400);
     if (!['embedded', 'ocr'].includes(source)) throw new ApiError('invalid source', 400);
     if (source === 'embedded' && typeof subtitleIndex !== 'number') throw new ApiError('subtitleIndex must be a number', 400);
@@ -22,7 +22,8 @@ router.post('/jobs', async (req, res, next) => {
       mode,
       source,
       outputVideo: Boolean(outputVideo),
-      fileName: String(fileName || '')
+      fileName: String(fileName || ''),
+      demoMode: Boolean(demoMode)
     }, {
       removeOnComplete: 50,
       removeOnFail: 50
@@ -32,7 +33,9 @@ router.post('/jobs', async (req, res, next) => {
       jobId: job.id,
       status: 'pending',
       createdAt: job.timestamp,
-      fileName: String(fileName || '')
+      fileName: String(fileName || ''),
+      demoMode: Boolean(demoMode),
+      demoDurationSec: env.demoDurationSec
     });
   } catch (err) {
     next(err);
@@ -55,6 +58,8 @@ router.get('/jobs/:jobId', async (req, res, next) => {
     const fileName = job.data?.fileName || null;
     const createdAt = job.timestamp || null;
     const outputVideoPath = state === 'completed' && job.returnvalue?.outputVideo ? job.returnvalue.outputVideo : null;
+    const demoMode = Boolean(job.data?.demoMode);
+    const demoDurationSec = env.demoDurationSec;
     const logResult = await job.getLogs(0, 300, true);
     const logs = Array.isArray(logResult?.logs) ? logResult.logs : [];
     res.json({
@@ -66,7 +71,9 @@ router.get('/jobs/:jobId', async (req, res, next) => {
       outputVideoPath,
       fileName,
       createdAt,
-      logs
+      logs,
+      demoMode,
+      demoDurationSec
     });
   } catch (err) {
     next(err);

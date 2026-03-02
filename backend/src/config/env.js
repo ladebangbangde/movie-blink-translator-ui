@@ -33,5 +33,6 @@ export const env = {
   ocrEngine: process.env.OCR_ENGINE || 'tesseract',
   ocrHttpUrl: process.env.OCR_HTTP_URL || '',
   ocrHttpTimeoutMs: asInt(process.env.OCR_HTTP_TIMEOUT_MS, 15000),
-  ocrHttpBatchSize: asInt(process.env.OCR_HTTP_BATCH_SIZE, 8)
+  ocrHttpBatchSize: asInt(process.env.OCR_HTTP_BATCH_SIZE, 8),
+  demoDurationSec: asInt(process.env.DEMO_DURATION_SEC, 120)
 };

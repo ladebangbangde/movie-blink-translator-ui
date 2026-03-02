@@ -11,6 +11,7 @@ const mode = ref('both');
 const source = ref('embedded');
 const uploadProgress = ref(0);
 const outputVideo = ref(false);
+const demoMode = ref(false);
 const tasks = ref([]);
 
 const canCreateJob = computed(() => fileId.value && (source.value === 'ocr' || subtitleIndex.value !== null));
@@ -41,7 +42,9 @@ function createTaskCard({ jobId, fileName, createdAt }) {
     failedStack: '',
     outputPath: '',
     outputVideoPath: '',
-    logs: []
+    logs: [],
+    demoMode: false,
+    demoDurationSec: 120
   };
 }
 
@@ -76,6 +79,7 @@ async function onCreateJob() {
       mode: mode.value,
       source: source.value,
       outputVideo: outputVideo.value,
+      demoMode: demoMode.value,
       fileName: file.value?.name || ''
     });
 
@@ -103,6 +107,8 @@ async function pollAllJobs() {
       task.fileName = result.fileName || task.fileName;
       task.createdAt = result.createdAt || task.createdAt;
       task.logs = Array.isArray(result.logs) ? result.logs : [];
+      task.demoMode = Boolean(result.demoMode);
+      task.demoDurationSec = result.demoDurationSec || task.demoDurationSec;
     } catch (error) {
       task.failedReason = error.response?.data?.message || '任务状态查询失败';
     }
@@ -158,6 +164,10 @@ onBeforeUnmount(() => {
         生成可直接播放的新视频（移除原字幕轨并挂载新字幕）
       </el-checkbox>
 
+      <el-checkbox v-model="demoMode" style="margin: 0 0 12px 12px">
+        Demo模式：仅截取前2分钟用于字幕识别准确度测试
+      </el-checkbox>
+
       <el-button type="success" :disabled="!canCreateJob" @click="onCreateJob">创建任务</el-button>
     </el-card>
 
@@ -168,6 +178,7 @@ onBeforeUnmount(() => {
         <div><b>文件：</b>{{ task.fileName }}</div>
         <div><b>创建时间：</b>{{ formatTime(task.createdAt) }}</div>
         <div><b>任务ID：</b>{{ task.jobId }}</div>
+        <div><b>模式：</b>{{ task.demoMode ? `Demo前${task.demoDurationSec}s` : '完整视频' }}</div>
         <div><b>状态：</b>{{ statusLabelMap[task.status] || task.status }}</div>
         <el-progress :percentage="task.progress" style="margin: 8px 0" />
         <div v-if="task.outputPath"><b>字幕输出：</b>{{ task.outputPath }}</div>

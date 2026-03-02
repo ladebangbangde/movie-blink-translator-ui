@@ -62,3 +62,17 @@ export async function composeVideoWithSubtitle(inputPath, subtitlePath, outputVi
   ];
   await runCommand('ffmpeg', args);
 }
+
+
+export async function trimVideoForDemo(inputPath, outputPath, durationSec = 120) {
+  const args = [
+    '-y',
+    '-ss', '0',
+    '-i', inputPath,
+    '-t', String(durationSec),
+    '-c', 'copy',
+    outputPath
+  ];
+  await runCommand('ffmpeg', args);
+}
+
