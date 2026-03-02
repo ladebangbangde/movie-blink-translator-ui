@@ -137,6 +137,7 @@ REDIS_URL=redis://:你的密码@redis.default.svc.cluster.local:6379/0
 - `POST /api/detect-subtitles` detect subtitle streams by `fileId`
 - `POST /api/jobs` create processing job
 - `GET /api/jobs/:jobId` get job status + progress
+- `GET /api/jobs/:jobId` 在失败时会返回 `failedReason` 和 `failedStack`，可直接用于排障。
 - `GET /api/download/:jobId` download generated subtitle file
 
 ## Notes
@@ -190,6 +191,26 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f backend worker
 ```
+
+### OCR 失败排障（重点）
+
+```bash
+# 先确认容器内 tesseract/语言包是否存在
+docker compose exec worker sh -lc 'tesseract --version && tesseract --list-langs'
+
+# 实时查看 OCR worker 报错
+docker compose logs -f worker
+
+# 直接看任务失败详情（包含 failedReason + failedStack）
+curl -s http://127.0.0.1/api/jobs/<jobId> | jq .
+```
+
+如果你看到 `file:///app/src/services/ocrSubtitleService.js:15:...` 这类老行号，通常是旧镜像还在跑，请执行：
+
+```bash
+docker compose up -d --build backend worker frontend
+```
+
 
 ### 访问
 
